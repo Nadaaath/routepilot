@@ -14,6 +14,9 @@ jobs:
     name: Backend build
     runs-on: ubuntu-latest
 
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/routepilot_ci
+
     defaults:
       run:
         working-directory: backend
