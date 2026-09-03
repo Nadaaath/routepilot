@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Employee {
+  id            Int       @id @default(autoincrement())
+  firstName     String
+  lastName      String
+  email         String    @unique
+  phone         String?
+  active        Boolean   @default(true)
+
+  pickupPointId Int?
+  pickupPoint   PickupPoint? @relation(fields: [pickupPointId], references: [id])
+
+  attendances      Attendance[]
+  shiftAssignments ShiftAssignment[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model PickupPoint {
+  id          Int        @id @default(autoincrement())
+  name        String
+  latitude    Float
+  longitude   Float
+  address     String?
+  mapUrl      String?
+
+  employees   Employee[]
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Vehicle {
+  id              Int       @id @default(autoincrement())
+  name            String
+  registration    String    @unique
+  capacity        Int
+  active          Boolean   @default(true)
+
+  fuelConsumption      Float?
+
+  // Legacy field kept for backward compatibility with older data/API clients.
+  // New RoutePilot planning uses maintenanceCostPerKm + fuel cost instead.
+  costPerKm             Float?
+  maintenanceCostPerKm  Float?
+
+  // A vehicle can remain operational while being excluded from automatic plans.
+  optimizerEligible     Boolean @default(true)
+
+  // PREFERRED | NORMAL | RESERVE
+  planningPriority      String  @default("NORMAL")
+
+  availability    VehicleAvailability[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Shift {
+  id          Int       @id @default(autoincrement())
+  name        String
+
+  // Stored as "HH:mm" for now, e.g. "08:00"
+  startTime   String
+  endTime     String
+
+  attendances      Attendance[]
+  assignments      ShiftAssignment[]
+  transportPlans   TransportPlan[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Attendance {
+  id         Int       @id @default(autoincrement())
+
+  employeeId Int
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+
+  shiftId    Int
+  shift      Shift     @relation(fields: [shiftId], references: [id])
+
+  date       DateTime
+  present    Boolean   @default(true)
+
+  createdAt  DateTime  @default(now())
+
+  @@unique([employeeId, date])
+}
+
+model ShiftAssignment {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftId    Int
+  shift      Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  date       DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, shiftId, date])
+  @@index([date])
+  @@index([shiftId, date])
+}
+
+model VehicleAvailability {
+  id        Int      @id @default(autoincrement())
+  vehicleId Int
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date      DateTime
+  available Boolean  @default(true)
+  reason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vehicleId, date])
+  @@index([date])
+}
+
+model Depot {
+  id        Int      @id @default(autoincrement())
+  name      String
+  latitude  Float
+  longitude Float
+  address   String?
+  mapUrl    String?
+
+  transportPlans TransportPlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TransportPlan {
+  id          Int      @id @default(autoincrement())
+  date        DateTime
+  shiftId     Int
+  shift       Shift    @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  depotId     Int
+  depot       Depot    @relation(fields: [depotId], references: [id], onDelete: Restrict)
+  direction   String
+  strategy    String
+  status      String   @default("DRAFT")
+  version     Int      @default(1)
+
+  request     Json
+  result      Json
+
+  approvedAt  DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+  @@index([shiftId, date])
+  @@index([status])
+}

@@ -1,0 +1,13 @@
+-- CreateTable
+CREATE TABLE "Depot" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "latitude" DOUBLE PRECISION NOT NULL,
+    "longitude" DOUBLE PRECISION NOT NULL,
+    "address" TEXT,
+    "mapUrl" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Depot_pkey" PRIMARY KEY ("id")
+);
