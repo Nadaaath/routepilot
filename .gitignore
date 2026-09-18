@@ -48,19 +48,37 @@ backend/src/generated/
 Thumbs.db
 
 # =========================================================
-# Terraform - later
+# Terraform
 # =========================================================
 
+# Terraform working directory
 **/.terraform/
+
+# Terraform state
 *.tfstate
 *.tfstate.*
+.terraform.tfstate.lock.info
+
+# Saved Terraform plans
 *.tfplan
-.terraform.lock.hcl
 
-# Do not commit real Terraform variable values
+# Local-only Terraform files
+infrastructure/terraform/*.local.tf
+
+# Real variable values / secrets
 *.tfvars
-!*.tfvars.example
+*.tfvars.json
 
+# But keep examples
+!*.tfvars.example
+!*.tfvars.example.json
+
+# Generated provider schema used for troubleshooting
+provider-schema.json
+
+# Terraform crash logs
+crash.log
+crash.*.log
 # =========================================================
 # Certificates / keys
 # =========================================================
