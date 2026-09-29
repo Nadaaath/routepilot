@@ -38,6 +38,6 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 
-EXPOSE 5000
+EXPOSE 8000
 
 CMD ["node", "dist/server.js"]
