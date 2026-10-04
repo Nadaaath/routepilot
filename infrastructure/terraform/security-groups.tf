@@ -9,10 +9,12 @@ resource "hcs_networking_secgroup" "frontend" {
 }
 
 
-# Allow HTTP traffic from the edge subnet.
-# Later the Load Balancer will live/use this edge network.
+# Public HTTP access.
+#
+# Traffic will eventually arrive through:
+# Internet -> EIP -> NAT/DNAT -> Frontend ECS
 
-resource "hcs_networking_secgroup_rule" "frontend_http_from_edge" {
+resource "hcs_networking_secgroup_rule" "frontend_http" {
   security_group_id = hcs_networking_secgroup.frontend.id
 
   direction = "ingress"
@@ -22,13 +24,30 @@ resource "hcs_networking_secgroup_rule" "frontend_http_from_edge" {
   port_range_min = var.frontend_port
   port_range_max = var.frontend_port
 
-  remote_ip_prefix = var.edge_subnet_cidr
+  remote_ip_prefix = "0.0.0.0/0"
 }
 
 
-# Allow frontend outbound traffic.
-# This does NOT automatically give the VM Internet access.
-# Routing/NAT will decide whether an Internet path actually exists.
+# Public HTTPS access.
+
+resource "hcs_networking_secgroup_rule" "frontend_https" {
+  security_group_id = hcs_networking_secgroup.frontend.id
+
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+
+  port_range_min = var.frontend_https_port
+  port_range_max = var.frontend_https_port
+
+  remote_ip_prefix = "0.0.0.0/0"
+}
+
+
+# Frontend outbound access.
+#
+# Actual Internet connectivity is provided through the
+# RoutePilot NAT Gateway and SNAT.
 
 resource "hcs_networking_secgroup_rule" "frontend_egress" {
   security_group_id = hcs_networking_secgroup.frontend.id
@@ -51,8 +70,8 @@ resource "hcs_networking_secgroup" "backend" {
 }
 
 
-# Only machines belonging to the frontend security group
-# can reach the Route Pilot backend port.
+# Only members of the frontend SG can access
+# the RoutePilot application backend port.
 
 resource "hcs_networking_secgroup_rule" "backend_from_frontend" {
   security_group_id = hcs_networking_secgroup.backend.id
@@ -68,12 +87,13 @@ resource "hcs_networking_secgroup_rule" "backend_from_frontend" {
 }
 
 
-# Backend needs outbound traffic later for:
-# - PostgreSQL
-# - external routing API
+# Backend outbound access is required for:
+# - PostgreSQL connections
+# - external APIs
 # - package updates
+# - application dependencies
 #
-# NAT/routing will still control actual Internet connectivity.
+# Internet access itself is provided by SNAT.
 
 resource "hcs_networking_secgroup_rule" "backend_egress" {
   security_group_id = hcs_networking_secgroup.backend.id
@@ -96,7 +116,7 @@ resource "hcs_networking_secgroup" "database" {
 }
 
 
-# PostgreSQL can only be reached by machines belonging
+# PostgreSQL is reachable only from machines belonging
 # to the backend security group.
 
 resource "hcs_networking_secgroup_rule" "database_from_backend" {
@@ -113,10 +133,11 @@ resource "hcs_networking_secgroup_rule" "database_from_backend" {
 }
 
 
-# Allow outbound at SG level for now.
+# Database outbound access is allowed for operating-system
+# updates and package installation through the NAT Gateway.
 #
-# Later, the DATABASE ROUTE TABLE will prevent Internet access,
-# so this does not mean the database becomes Internet-accessible.
+# This DOES NOT expose PostgreSQL to the Internet.
+# PostgreSQL ingress remains restricted to the backend SG.
 
 resource "hcs_networking_secgroup_rule" "database_egress" {
   security_group_id = hcs_networking_secgroup.database.id
@@ -127,9 +148,21 @@ resource "hcs_networking_secgroup_rule" "database_egress" {
   remote_ip_prefix = "0.0.0.0/0"
 }
 
+
 # ============================================================
-# SSH ADMINISTRATION FROM MANAGEMENT / JUMP SERVER
+# TEMPORARY SSH ADMINISTRATION
 # ============================================================
+#
+# The existing Windows jump server currently reaches RoutePilot
+# through the RoutePilot public EIP/DNAT path.
+#
+# 41.137.193.197 is the public source IP used by that
+# management server.
+#
+# These rules are useful while provisioning the ECSs.
+# They should be removed once a proper private management path
+# (VPN/peering/etc.) exists or when administrative DNAT is removed.
+
 
 resource "hcs_networking_secgroup_rule" "frontend_ssh_from_management" {
   security_group_id = hcs_networking_secgroup.frontend.id

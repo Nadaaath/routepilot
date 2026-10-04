@@ -46,9 +46,3 @@ locals {
     if image.name == "UBUNTU-24.04-LTS-STD-SERVER"
   ][0]
 }
-
-# ============================================================
-# Existing EIPs - temporary discovery
-# ============================================================
-
-data "hcs_vpc_eips" "existing" {}

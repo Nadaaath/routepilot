@@ -8,21 +8,14 @@ resource "hcs_nat_gateway" "routepilot" {
 
   spec = "1"
 
-  vpc_id    = hcs_vpc.routepilot.id
-  subnet_id = hcs_vpc_subnet.edge.id
-}
+  vpc_id = hcs_vpc.routepilot.id
 
-
-# ============================================================
-# EXISTING AVAILABLE EIP
-#
-# Existing HCS EIP:
-# 41.137.193.212
-# Status before use: UNBOUND
-# ============================================================
-
-locals {
-  routepilot_nat_eip_id = "1e61ed9d-5389-4805-941c-a8fe48b278c4"
+  # The currently working NAT Gateway is attached to the
+  # database subnet. We keep that attachment for now to avoid
+  # replacing a working NAT Gateway.
+  #
+  # This does NOT mean that the NAT belongs only to the DB tier.
+  subnet_id = hcs_vpc_subnet.database.id
 }
 
 
@@ -32,7 +25,7 @@ locals {
 
 resource "hcs_nat_snat_rule" "frontend" {
   nat_gateway_id = hcs_nat_gateway.routepilot.id
-  floating_ip_id = local.routepilot_nat_eip_id
+  floating_ip_id = var.routepilot_nat_eip_id
 
   subnet_id   = hcs_vpc_subnet.frontend.id
   source_type = 0
@@ -47,10 +40,34 @@ resource "hcs_nat_snat_rule" "frontend" {
 
 resource "hcs_nat_snat_rule" "backend" {
   nat_gateway_id = hcs_nat_gateway.routepilot.id
-  floating_ip_id = local.routepilot_nat_eip_id
+  floating_ip_id = var.routepilot_nat_eip_id
 
   subnet_id   = hcs_vpc_subnet.backend.id
   source_type = 0
 
   description = "SNAT for Route Pilot backend subnet"
+}
+
+
+# ============================================================
+# DATABASE SNAT
+# ============================================================
+
+resource "hcs_nat_snat_rule" "database" {
+  nat_gateway_id = hcs_nat_gateway.routepilot.id
+  floating_ip_id = var.routepilot_nat_eip_id
+
+  subnet_id   = hcs_vpc_subnet.database.id
+  source_type = 0
+
+  description = "SNAT for Route Pilot database subnet"
+
+  # The DB SNAT rule already exists in HCS and was imported.
+  # Do not recreate it only because its existing description
+  # differs from the Terraform description.
+  lifecycle {
+    ignore_changes = [
+      description
+    ]
+  }
 }

@@ -1,5 +1,30 @@
 # ============================================================
-# Security Group Outputs
+# VPC / SUBNET OUTPUTS
+# ============================================================
+
+output "routepilot_vpc_id" {
+  description = "Route Pilot VPC ID"
+  value       = hcs_vpc.routepilot.id
+}
+
+output "frontend_subnet_id" {
+  description = "Route Pilot frontend subnet ID"
+  value       = hcs_vpc_subnet.frontend.id
+}
+
+output "backend_subnet_id" {
+  description = "Route Pilot backend subnet ID"
+  value       = hcs_vpc_subnet.backend.id
+}
+
+output "database_subnet_id" {
+  description = "Route Pilot database subnet ID"
+  value       = hcs_vpc_subnet.database.id
+}
+
+
+# ============================================================
+# SECURITY GROUP OUTPUTS
 # ============================================================
 
 output "frontend_security_group_id" {
@@ -17,15 +42,15 @@ output "database_security_group_id" {
   value       = hcs_networking_secgroup.database.id
 }
 
+
 # ============================================================
-# HCS Compute Discovery
+# HCS COMPUTE DISCOVERY
 # ============================================================
 
 output "available_availability_zones" {
   description = "Availability zones available in HCS"
   value       = data.hcs_availability_zones.available.names
 }
-
 
 output "candidate_ecs_flavors" {
   description = "Available 2 vCPU / 4 GB ECS flavors"
@@ -41,7 +66,6 @@ output "candidate_ecs_flavors" {
   ]
 }
 
-
 output "available_ubuntu_images" {
   description = "Available public Ubuntu x86_64 images"
 
@@ -56,8 +80,9 @@ output "available_ubuntu_images" {
   ]
 }
 
+
 # ============================================================
-# ECS Outputs
+# ECS OUTPUTS
 # ============================================================
 
 output "frontend_private_ip" {
@@ -75,8 +100,9 @@ output "database_private_ip" {
   value       = hcs_ecs_compute_instance.database.access_ip_v4
 }
 
+
 # ============================================================
-# NAT Outputs
+# NAT OUTPUTS
 # ============================================================
 
 output "nat_gateway_id" {
@@ -86,22 +112,15 @@ output "nat_gateway_id" {
 
 output "nat_public_ip" {
   description = "Existing EIP used by Route Pilot NAT"
-  value       = "41.137.193.212"
+  value       = var.routepilot_nat_public_ip
 }
 
-output "existing_eips" {
-  description = "Existing EIPs in the current HCS project"
+output "routepilot_elb_id" {
+  description = "Route Pilot ELB resource ID"
+  value       = hcs_elb_loadbalancer.routepilot.id
+}
 
-  value = [
-    for eip in data.hcs_vpc_eips.existing.eips : {
-      id                   = eip.id
-      name                 = eip.name
-      public_ip            = eip.public_ip
-      type                 = eip.type
-      bandwidth_name       = eip.bandwidth_name
-      bandwidth_size       = eip.bandwidth_size
-      bandwidth_share_type = eip.bandwidth_share_type
-      status               = eip.status
-    }
-  ]
+output "routepilot_elb_private_ip" {
+  description = "Private IPv4 address of the Route Pilot ELB"
+  value       = hcs_elb_loadbalancer.routepilot.ipv4_address
 }
