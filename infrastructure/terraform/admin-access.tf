@@ -95,3 +95,18 @@ resource "hcs_nat_dnat_rule" "database_ssh" {
     ]
   }
 }
+
+resource "hcs_nat_dnat_rule" "bastion_ssh" {
+  count = var.enable_admin_dnat ? 1 : 0
+
+  nat_gateway_id = hcs_nat_gateway.routepilot.id
+  floating_ip_id = var.routepilot_nat_eip_id
+
+  port_id = hcs_ecs_compute_instance.bastion.network[0].port
+
+  protocol              = "tcp"
+  external_service_port = 2220
+  internal_service_port = 22
+
+  description = "Temporary SSH access to RoutePilot bastion"
+}

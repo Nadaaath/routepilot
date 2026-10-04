@@ -104,3 +104,38 @@ resource "hcs_ecs_compute_instance" "database" {
     tier    = "database"
   }
 }
+
+# ============================================================
+# ROUTE PILOT BASTION / MANAGEMENT ECS
+# ============================================================
+
+resource "hcs_ecs_compute_instance" "bastion" {
+  name        = "routepilot-bastion"
+  description = "Route Pilot bastion and Ansible management server"
+
+  availability_zone = data.hcs_availability_zones.available.names[0]
+
+  flavor_id = local.routepilot_flavor.id
+  image_id  = local.routepilot_image.id
+
+  key_pair = hcs_ecs_compute_keypair.routepilot.name
+
+  security_group_ids = [
+    hcs_networking_secgroup.bastion.id
+  ]
+
+  network {
+    uuid        = hcs_vpc_subnet.management.id
+    fixed_ip_v4 = "10.100.5.10"
+  }
+
+  system_disk_type = "business_type_02"
+  system_disk_size = 50
+
+  delete_disks_on_termination = true
+
+  tags = {
+    project = "routepilot"
+    tier    = "management"
+  }
+}

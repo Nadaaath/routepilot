@@ -204,3 +204,58 @@ resource "hcs_networking_secgroup_rule" "database_ssh_from_management" {
 
   remote_ip_prefix = var.management_host_ip
 }
+
+resource "hcs_networking_secgroup" "bastion" {
+  name        = "routepilot-bastion-sg"
+  description = "Security group for RoutePilot bastion and management host"
+}
+
+resource "hcs_networking_secgroup_rule" "bastion_ssh_from_management" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_ip_prefix  = var.management_host_ip
+  security_group_id = hcs_networking_secgroup.bastion.id
+}
+
+resource "hcs_networking_secgroup_rule" "bastion_egress" {
+  direction         = "egress"
+  ethertype         = "IPv4"
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = hcs_networking_secgroup.bastion.id
+}
+
+# Bastion -> Frontend SSH
+resource "hcs_networking_secgroup_rule" "frontend_ssh_from_bastion" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_group_id   = hcs_networking_secgroup.bastion.id
+  security_group_id = hcs_networking_secgroup.frontend.id
+}
+
+# Bastion -> Backend SSH
+resource "hcs_networking_secgroup_rule" "backend_ssh_from_bastion" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_group_id   = hcs_networking_secgroup.bastion.id
+  security_group_id = hcs_networking_secgroup.backend.id
+}
+
+# Bastion -> Database SSH
+resource "hcs_networking_secgroup_rule" "database_ssh_from_bastion" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 22
+  port_range_max    = 22
+  remote_group_id   = hcs_networking_secgroup.bastion.id
+  security_group_id = hcs_networking_secgroup.database.id
+}

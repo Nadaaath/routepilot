@@ -38,3 +38,13 @@ resource "hcs_vpc_subnet" "database" {
   primary_dns   = var.primary_dns
   secondary_dns = var.secondary_dns
 }
+
+resource "hcs_vpc_subnet" "management" {
+  name       = "routepilot-management-subnet"
+  cidr       = var.management_subnet_cidr
+  gateway_ip = "10.100.5.1"
+  vpc_id     = hcs_vpc.routepilot.id
+
+  primary_dns   = "8.8.8.8"
+  secondary_dns = "1.1.1.1"
+}

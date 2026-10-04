@@ -167,3 +167,11 @@ variable "routepilot_elb_certificate_id" {
   description = "ID of the self-signed server certificate used by the RoutePilot HTTPS listener"
   type        = string
 }
+# ============================================================
+# Managment
+# ============================================================
+variable "management_subnet_cidr" {
+  description = "CIDR block for RoutePilot management subnet"
+  type        = string
+  default     = "10.100.5.0/24"
+}

@@ -71,3 +71,11 @@ resource "hcs_nat_snat_rule" "database" {
     ]
   }
 }
+
+resource "hcs_nat_snat_rule" "management" {
+  nat_gateway_id = hcs_nat_gateway.routepilot.id
+  floating_ip_id = var.routepilot_nat_eip_id
+  subnet_id      = hcs_vpc_subnet.management.id
+
+  description = "SNAT for RoutePilot management subnet"
+}
