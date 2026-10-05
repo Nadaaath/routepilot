@@ -1,0 +1,76 @@
+---
+- name: Ensure backend deployment directory exists
+  ansible.builtin.file:
+    path: /opt/routepilot
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+
+- name: Clone or update RoutePilot repository
+  ansible.builtin.git:
+    repo: "https://github.com/Nadaaath/routepilot.git"
+    dest: /opt/routepilot
+    version: main
+    update: true
+    force: false
+  become_user: ubuntu
+  register: routepilot_repo
+
+
+- name: Ensure RoutePilot configuration directory exists
+  ansible.builtin.file:
+    path: /etc/routepilot
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+
+- name: Check backend environment file
+  ansible.builtin.stat:
+    path: /etc/routepilot/backend.env
+  register: backend_env
+
+
+- name: Stop deployment if backend environment file is missing
+  ansible.builtin.fail:
+    msg: >
+      /etc/routepilot/backend.env does not exist.
+      Backend secrets must not be stored directly in GitHub.
+  when: not backend_env.stat.exists
+
+
+- name: Ensure backend environment file permissions are secure
+  ansible.builtin.file:
+    path: /etc/routepilot/backend.env
+    owner: root
+    group: root
+    mode: "0600"
+
+
+- name: Build RoutePilot backend Docker image
+  community.docker.docker_image:
+    name: routepilot-backend
+    tag: "1.0"
+    source: build
+    build:
+      path: /opt/routepilot/backend
+    force_source: "{{ routepilot_repo.changed }}"
+  register: backend_image
+
+
+- name: Run RoutePilot backend container
+  community.docker.docker_container:
+    name: routepilot-backend
+    image: routepilot-backend:1.0
+    state: started
+    restart_policy: unless-stopped
+
+    env_file: /etc/routepilot/backend.env
+
+    published_ports:
+      - "8000:8000"
+
+    recreate: "{{ backend_image.changed }}"

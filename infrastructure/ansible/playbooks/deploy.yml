@@ -1,0 +1,7 @@
+---
+- name: Deploy RoutePilot backend
+  hosts: backend
+  become: true
+
+  roles:
+    - backend
