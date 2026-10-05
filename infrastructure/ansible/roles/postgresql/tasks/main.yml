@@ -1,0 +1,34 @@
+---
+- name: Ensure PostgreSQL packages are installed
+  ansible.builtin.apt:
+    name:
+      - postgresql
+      - postgresql-16
+      - postgresql-client-16
+      - postgresql-contrib
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure PostgreSQL listens on localhost and private database IP
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: '^\s*#?\s*listen_addresses\s*='
+    line: "listen_addresses = 'localhost,10.100.3.10'"
+    backup: true
+  notify: Restart PostgreSQL
+
+- name: Ensure RoutePilot backend can authenticate to PostgreSQL
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/pg_hba.conf
+    regexp: '^host\s+routepilot_db\s+routepilot_app\s+10\.100\.2\.10/32\s+'
+    line: 'host routepilot_db routepilot_app 10.100.2.10/32 scram-sha-256'
+    insertafter: EOF
+    backup: true
+  notify: Reload PostgreSQL
+
+- name: Ensure PostgreSQL service is enabled and running
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true

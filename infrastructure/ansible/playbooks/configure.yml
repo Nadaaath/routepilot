@@ -1,0 +1,17 @@
+---
+- name: Configure RoutePilot frontend and backend runtime
+  hosts:
+    - frontend
+    - backend
+  become: true
+
+  roles:
+    - docker
+
+
+- name: Configure RoutePilot database runtime
+  hosts: database
+  become: true
+
+  roles:
+    - postgresql
