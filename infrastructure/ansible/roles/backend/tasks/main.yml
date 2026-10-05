@@ -8,6 +8,28 @@
     mode: "0755"
 
 
+# ---------------------------------------------------------
+# Detect the currently deployed Git commit
+# ---------------------------------------------------------
+
+- name: Check whether RoutePilot Git repository already exists
+  ansible.builtin.stat:
+    path: /opt/routepilot/.git
+  register: routepilot_git_repo
+
+
+- name: Get currently deployed Git commit
+  ansible.builtin.command:
+    cmd: git -C /opt/routepilot rev-parse HEAD
+  register: backend_commit_before
+  changed_when: false
+  when: routepilot_git_repo.stat.exists
+
+
+# ---------------------------------------------------------
+# Update the repository
+# ---------------------------------------------------------
+
 - name: Clone or update RoutePilot repository
   ansible.builtin.git:
     repo: "https://github.com/Nadaaath/routepilot.git"
@@ -19,13 +41,59 @@
   register: routepilot_repo
 
 
+- name: Get Git commit after repository update
+  ansible.builtin.command:
+    cmd: git -C /opt/routepilot rev-parse HEAD
+  register: backend_commit_after
+  changed_when: false
+
+
+# ---------------------------------------------------------
+# Detect whether BACKEND CODE actually changed
+# ---------------------------------------------------------
+
+- name: Find changed backend files
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - /opt/routepilot
+      - diff
+      - --name-only
+      - "{{ backend_commit_before.stdout }}"
+      - "{{ backend_commit_after.stdout }}"
+      - --
+      - backend/
+  register: backend_changed_files
+  changed_when: false
+  when:
+    - routepilot_git_repo.stat.exists
+    - backend_commit_before.stdout != backend_commit_after.stdout
+
+
+- name: Decide whether backend image must be rebuilt
+  ansible.builtin.set_fact:
+    backend_source_changed: >-
+      {{
+        (not routepilot_git_repo.stat.exists)
+        or
+        (
+          backend_changed_files.stdout | default('') | trim | length > 0
+        )
+      }}
+
+
+# ---------------------------------------------------------
+# Backend configuration
+# ---------------------------------------------------------
+
 - name: Ensure RoutePilot configuration directory exists
   ansible.builtin.file:
     path: /etc/routepilot
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: "0700"
 
 
 - name: Check backend environment file
@@ -50,6 +118,10 @@
     mode: "0600"
 
 
+# ---------------------------------------------------------
+# Docker image
+# ---------------------------------------------------------
+
 - name: Build RoutePilot backend Docker image
   community.docker.docker_image:
     name: routepilot-backend
@@ -57,9 +129,13 @@
     source: build
     build:
       path: /opt/routepilot/backend
-    force_source: "{{ routepilot_repo.changed }}"
+    force_source: "{{ backend_source_changed | bool }}"
   register: backend_image
 
+
+# ---------------------------------------------------------
+# Backend container
+# ---------------------------------------------------------
 
 - name: Run RoutePilot backend container
   community.docker.docker_container:
@@ -73,4 +149,4 @@
     published_ports:
       - "8000:8000"
 
-    recreate: "{{ backend_image.changed }}"
+    recreate: "{{ backend_image.changed | bool }}"
