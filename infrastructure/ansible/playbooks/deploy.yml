@@ -5,3 +5,11 @@
 
   roles:
     - backend
+
+
+- name: Deploy RoutePilot frontend
+  hosts: frontend
+  become: true
+
+  roles:
+    - frontend
