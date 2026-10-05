@@ -1,0 +1,20 @@
+---
+- name: Configure RoutePilot common baseline
+  hosts: routepilot
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure common administration packages are installed
+      ansible.builtin.apt:
+        name:
+          - curl
+          - git
+          - ca-certificates
+          - unzip
+        state: present
