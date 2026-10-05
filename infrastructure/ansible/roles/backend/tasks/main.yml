@@ -150,3 +150,14 @@
       - "8000:8000"
 
     recreate: "{{ backend_image.changed | bool }}"
+
+# ---------------------------------------------------------
+# Database migrations
+# ---------------------------------------------------------
+
+- name: Apply Prisma database migrations
+  ansible.builtin.command:
+    cmd: docker exec routepilot-backend npx prisma migrate deploy
+  register: prisma_migrate
+  changed_when: >
+    'No pending migrations to apply' not in prisma_migrate.stdout
