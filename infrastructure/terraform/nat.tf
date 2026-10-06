@@ -15,7 +15,7 @@ resource "hcs_nat_gateway" "routepilot" {
   # replacing a working NAT Gateway.
   #
   # This does NOT mean that the NAT belongs only to the DB tier.
-  subnet_id = hcs_vpc_subnet.database.id
+  subnet_id = hcs_vpc_subnet.edge.id
 }
 
 
@@ -72,10 +72,13 @@ resource "hcs_nat_snat_rule" "database" {
   }
 }
 
+
 resource "hcs_nat_snat_rule" "management" {
   nat_gateway_id = hcs_nat_gateway.routepilot.id
   floating_ip_id = var.routepilot_nat_eip_id
-  subnet_id      = hcs_vpc_subnet.management.id
+
+  subnet_id   = hcs_vpc_subnet.management.id
+  source_type = 0
 
   description = "SNAT for RoutePilot management subnet"
 }

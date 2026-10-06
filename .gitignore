@@ -77,6 +77,7 @@ infrastructure/terraform/*.local.tf
 # But keep examples
 !*.tfvars.example
 !*.tfvars.example.json
+infrastructure/terraform/state-*.json
 
 # Generated provider schema used for troubleshooting
 provider-schema.json

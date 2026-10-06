@@ -1,30 +1,34 @@
 # ============================================================
-# TEMPORARY ADMINISTRATION ACCESS
+# ROUTE PILOT ADMINISTRATION ACCESS
 # ============================================================
 #
-# These DNAT rules expose SSH temporarily through the Route
-# Pilot public EIP so the Windows management/jump server can
-# administer the three ECS instances.
+# Permanent management model:
 #
-# They are NOT part of the permanent application ingress.
+#   Windows jump server
+#          |
+#          | SSH through public NAT EIP
+#          | TCP 2220
+#          v
+#   RoutePilot bastion
+#          |
+#          | Private SSH inside the VPC
+#          v
+#   Frontend / Backend / Database
 #
-# Later, when private management connectivity is available,
-# set:
-#
-#   enable_admin_dnat = false
-#
-# and Terraform will remove these three DNAT rules.
+# Direct public SSH DNAT to the application ECSs is disabled
+# by default and should only be enabled temporarily for
+# troubleshooting if absolutely necessary.
 # ============================================================
 
 
 # ============================================================
-# FRONTEND SSH
+# FRONTEND SSH - TEMPORARY / DISABLED BY DEFAULT
 #
-# 41.137.193.196:2221 -> 10.100.1.10:22
+# 41.137.193.196:2221 -> frontend:22
 # ============================================================
 
 resource "hcs_nat_dnat_rule" "frontend_ssh" {
-  count = var.enable_admin_dnat ? 1 : 0
+  count = var.enable_direct_ecs_admin_dnat ? 1 : 0
 
   nat_gateway_id = hcs_nat_gateway.routepilot.id
   floating_ip_id = var.routepilot_nat_eip_id
@@ -36,18 +40,18 @@ resource "hcs_nat_dnat_rule" "frontend_ssh" {
   external_service_port = 2221
   internal_service_port = 22
 
-  description = "Temporary SSH access to Route Pilot frontend"
+  description = "Temporary direct SSH access to RoutePilot frontend"
 }
 
 
 # ============================================================
-# BACKEND SSH
+# BACKEND SSH - TEMPORARY / DISABLED BY DEFAULT
 #
-# 41.137.193.196:2222 -> 10.100.2.10:22
+# 41.137.193.196:2222 -> backend:22
 # ============================================================
 
 resource "hcs_nat_dnat_rule" "backend_ssh" {
-  count = var.enable_admin_dnat ? 1 : 0
+  count = var.enable_direct_ecs_admin_dnat ? 1 : 0
 
   nat_gateway_id = hcs_nat_gateway.routepilot.id
   floating_ip_id = var.routepilot_nat_eip_id
@@ -59,21 +63,18 @@ resource "hcs_nat_dnat_rule" "backend_ssh" {
   external_service_port = 2222
   internal_service_port = 22
 
-  description = "Temporary SSH access to Route Pilot backend"
+  description = "Temporary direct SSH access to RoutePilot backend"
 }
 
 
 # ============================================================
-# DATABASE SSH
+# DATABASE SSH - TEMPORARY / DISABLED BY DEFAULT
 #
-# 41.137.193.196:2223 -> 10.100.3.10:22
-#
-# This DNAT rule already exists manually in HCS.
-# It must be imported into Terraform state before applying.
+# 41.137.193.196:2223 -> database:22
 # ============================================================
 
 resource "hcs_nat_dnat_rule" "database_ssh" {
-  count = var.enable_admin_dnat ? 1 : 0
+  count = var.enable_direct_ecs_admin_dnat ? 1 : 0
 
   nat_gateway_id = hcs_nat_gateway.routepilot.id
   floating_ip_id = var.routepilot_nat_eip_id
@@ -85,10 +86,8 @@ resource "hcs_nat_dnat_rule" "database_ssh" {
   external_service_port = 2223
   internal_service_port = 22
 
-  description = "Temporary SSH access to Route Pilot database"
+  description = "Temporary direct SSH access to RoutePilot database"
 
-  # The existing DB rule was created manually.
-  # Do not recreate it solely because its description differs.
   lifecycle {
     ignore_changes = [
       description
@@ -96,17 +95,28 @@ resource "hcs_nat_dnat_rule" "database_ssh" {
   }
 }
 
+
+# ============================================================
+# BASTION SSH
+#
+# 41.137.193.196:2220 -> bastion:22
+#
+# This remains enabled because the bastion is the controlled
+# administrative entry point into the RoutePilot VPC.
+# ============================================================
+
 resource "hcs_nat_dnat_rule" "bastion_ssh" {
-  count = var.enable_admin_dnat ? 1 : 0
+  count = var.enable_bastion_dnat ? 1 : 0
 
   nat_gateway_id = hcs_nat_gateway.routepilot.id
   floating_ip_id = var.routepilot_nat_eip_id
 
   port_id = hcs_ecs_compute_instance.bastion.network[0].port
 
-  protocol              = "tcp"
+  protocol = "tcp"
+
   external_service_port = 2220
   internal_service_port = 22
 
-  description = "Temporary SSH access to RoutePilot bastion"
+  description = "SSH access to RoutePilot bastion"
 }

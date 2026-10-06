@@ -25,16 +25,6 @@ variable "vpc_cidr" {
   default     = "10.100.0.0/16"
 }
 
-resource "hcs_vpc_subnet" "edge" {
-  name       = "routepilot-edge-subnet"
-  cidr       = var.edge_subnet_cidr
-  gateway_ip = "10.100.4.1"
-  vpc_id     = hcs_vpc.routepilot.id
-
-  primary_dns   = var.primary_dns
-  secondary_dns = var.secondary_dns
-}
-
 variable "frontend_subnet_cidr" {
   description = "Frontend subnet CIDR"
   type        = string
@@ -53,13 +43,26 @@ variable "database_subnet_cidr" {
   default     = "10.100.3.0/24"
 }
 
+variable "edge_subnet_cidr" {
+  description = "Edge subnet CIDR for Route Pilot network services such as ELB and NAT"
+  type        = string
+  default     = "10.100.4.0/24"
+}
+
+variable "management_subnet_cidr" {
+  description = "CIDR block for RoutePilot management subnet"
+  type        = string
+  default     = "10.100.5.0/24"
+}
+
 
 # ============================================================
 # DNS
 # ============================================================
 #
-# Replace these with corporate/internal DNS servers if your
+# Replace these with corporate/internal DNS servers if the
 # HCS administrator provides them.
+# ============================================================
 
 variable "primary_dns" {
   description = "Primary DNS server distributed to Route Pilot ECSs"
@@ -107,13 +110,17 @@ variable "database_port" {
 # MANAGEMENT ACCESS
 # ============================================================
 #
-# Current public egress IP of the Windows jump server.
+# Public source IP of the company Windows jump server.
 #
-# This is temporary until a private management path
-# to routepilot-vpc is available.
+# The Windows jump server is allowed to reach only the
+# RoutePilot bastion over SSH.
+#
+# Application ECSs are administered privately through
+# the bastion.
+# ============================================================
 
 variable "management_host_ip" {
-  description = "Public source CIDR allowed to SSH to Route Pilot ECSs during deployment"
+  description = "Public source CIDR allowed to SSH to the RoutePilot bastion"
   type        = string
   default     = "41.137.193.197/32"
 }
@@ -128,6 +135,7 @@ variable "management_host_ip" {
 #     41.137.193.196
 #
 # Do NOT put the IPv4 address itself here.
+# ============================================================
 
 variable "routepilot_nat_eip_id" {
   description = "Resource ID of the existing EIP 41.137.193.196 used by Route Pilot NAT"
@@ -139,15 +147,30 @@ variable "routepilot_nat_public_ip" {
   type        = string
   default     = "41.137.193.196"
 }
+
+
 # ============================================================
-# TEMPORARY ADMINISTRATION DNAT
+# ADMINISTRATION DNAT
+# ============================================================
+#
+# Bastion SSH remains enabled because it is the management
+# entry point into RoutePilot.
+#
+# Direct SSH DNAT to application ECSs is disabled by default.
 # ============================================================
 
-variable "enable_admin_dnat" {
-  description = "Enable temporary SSH DNAT rules for Route Pilot ECS administration"
+variable "enable_bastion_dnat" {
+  description = "Enable public SSH DNAT to the RoutePilot bastion"
   type        = bool
   default     = true
 }
+
+variable "enable_direct_ecs_admin_dnat" {
+  description = "Enable temporary direct SSH DNAT to frontend, backend and database ECSs"
+  type        = bool
+  default     = false
+}
+
 
 # ============================================================
 # ELB PUBLIC EIP
@@ -166,12 +189,4 @@ variable "routepilot_elb_eip_id" {
 variable "routepilot_elb_certificate_id" {
   description = "ID of the self-signed server certificate used by the RoutePilot HTTPS listener"
   type        = string
-}
-# ============================================================
-# Managment
-# ============================================================
-variable "management_subnet_cidr" {
-  description = "CIDR block for RoutePilot management subnet"
-  type        = string
-  default     = "10.100.5.0/24"
 }
