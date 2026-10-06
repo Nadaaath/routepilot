@@ -96,26 +96,15 @@
     mode: "0700"
 
 
-- name: Check backend environment file
-  ansible.builtin.stat:
-    path: /etc/routepilot/backend.env
-  register: backend_env
-
-
-- name: Stop deployment if backend environment file is missing
-  ansible.builtin.fail:
-    msg: >
-      /etc/routepilot/backend.env does not exist.
-      Backend secrets must not be stored directly in GitHub.
-  when: not backend_env.stat.exists
-
-
-- name: Ensure backend environment file permissions are secure
-  ansible.builtin.file:
-    path: /etc/routepilot/backend.env
+- name: Deploy backend environment file
+  ansible.builtin.template:
+    src: backend.env.j2
+    dest: /etc/routepilot/backend.env
     owner: root
     group: root
     mode: "0600"
+  no_log: true
+  register: backend_env_config
 
 
 # ---------------------------------------------------------
@@ -149,7 +138,12 @@
     published_ports:
       - "8000:8000"
 
-    recreate: "{{ backend_image.changed | bool }}"
+    recreate: >-
+      {{
+        (backend_image.changed | default(false))
+        or
+        (backend_env_config.changed | default(false))
+      }}
 
 # ---------------------------------------------------------
 # Database migrations
