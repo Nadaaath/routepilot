@@ -62,6 +62,11 @@ Thumbs.db
 # Saved Terraform plans
 *.tfplan
 
+# Terraform troubleshooting/state exports
+terraform-state*.json
+provider-schema.json
+
+
 # Local-only Terraform files
 infrastructure/terraform/*.local.tf
 
