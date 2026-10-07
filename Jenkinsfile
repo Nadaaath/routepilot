@@ -2,8 +2,11 @@ pipeline {
     agent any
 
     options {
-        skipDefaultCheckout(true)
-    }
+    skipDefaultCheckout(true)
+    disableConcurrentBuilds()
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+}
 
     environment {
         CI = 'true'
@@ -57,6 +60,26 @@ pipeline {
                 '''
             }
         }
+
+        stage('GHCR Login Test') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'ghcr-credentials',
+                usernameVariable: 'GHCR_USER',
+                passwordVariable: 'GHCR_TOKEN'
+            )
+        ]) {
+            sh '''
+                set +x
+                printf '%s' "$GHCR_TOKEN" | \
+                    docker login ghcr.io \
+                    -u "$GHCR_USER" \
+                    --password-stdin
+            '''
+        }
+    }
+}
 
         stage('Ansible Preflight') {
             steps {
