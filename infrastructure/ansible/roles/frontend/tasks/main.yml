@@ -29,6 +29,15 @@
 
   no_log: true
 
+# ------------------------------------------------------------
+# Remove legacy source-code deployment
+# ------------------------------------------------------------
+
+- name: Remove legacy RoutePilot source checkout
+  ansible.builtin.file:
+    path: /opt/routepilot
+    state: absent
+
 
 # ------------------------------------------------------------
 # Runtime Nginx configuration
