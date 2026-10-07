@@ -115,9 +115,9 @@ pipeline {
 
             echo "Building RoutePilot images with tag: $ROUTEPILOT_IMAGE_TAG"
 
-            docker build \
-              -t ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG \
-              ./backend
+            docker build --pull \
+  -t ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG \
+  ./backend
 
             docker build --pull \
   --build-arg VITE_API_BASE_URL=/api \
