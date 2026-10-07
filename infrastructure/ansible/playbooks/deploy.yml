@@ -1,15 +1,59 @@
 ---
+# ============================================================
+# ROUTEPILOT PRODUCTION DEPLOYMENT
+# ============================================================
+#
+# Deployment variables are supplied by the Jenkins process
+# through environment variables.
+#
+# ROUTEPILOT_IMAGE_TAG:
+#   Exact Git SHA tag built and published by Jenkins.
+#
+# GHCR_USER / GHCR_TOKEN:
+#   Temporary GHCR credentials supplied through
+#   Jenkins Credentials.
+# ============================================================
+
+
+# ============================================================
+# BACKEND
+# ============================================================
+
 - name: Deploy RoutePilot backend
   hosts: backend
   become: true
+
+  vars:
+    routepilot_image_tag: >-
+      {{ lookup('ansible.builtin.env', 'ROUTEPILOT_IMAGE_TAG') }}
+
+    ghcr_username: >-
+      {{ lookup('ansible.builtin.env', 'GHCR_USER') }}
+
+    ghcr_token: >-
+      {{ lookup('ansible.builtin.env', 'GHCR_TOKEN') }}
 
   roles:
     - backend
 
 
+# ============================================================
+# FRONTEND
+# ============================================================
+
 - name: Deploy RoutePilot frontend
   hosts: frontend
   become: true
+
+  vars:
+    routepilot_image_tag: >-
+      {{ lookup('ansible.builtin.env', 'ROUTEPILOT_IMAGE_TAG') }}
+
+    ghcr_username: >-
+      {{ lookup('ansible.builtin.env', 'GHCR_USER') }}
+
+    ghcr_token: >-
+      {{ lookup('ansible.builtin.env', 'GHCR_TOKEN') }}
 
   roles:
     - frontend

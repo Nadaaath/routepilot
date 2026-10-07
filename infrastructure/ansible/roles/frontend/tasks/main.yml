@@ -1,97 +1,38 @@
 ---
-- name: Ensure frontend deployment directory exists
-  ansible.builtin.file:
-    path: /opt/routepilot
-    state: directory
-    owner: ubuntu
-    group: ubuntu
-    mode: "0755"
+# ============================================================
+# ROUTEPILOT FRONTEND DEPLOYMENT
+# ============================================================
+#
+# Jenkins builds and publishes the frontend Docker image.
+#
+# The frontend VM only pulls and runs the exact artifact
+# produced by the CI pipeline.
+# ============================================================
 
 
-# ---------------------------------------------------------
-# Inspect Git repository
-# ---------------------------------------------------------
+# ------------------------------------------------------------
+# Validate deployment input
+# ------------------------------------------------------------
 
-- name: Check whether RoutePilot Git repository already exists
-  ansible.builtin.stat:
-    path: /opt/routepilot/.git
-  register: routepilot_frontend_git
+- name: Validate frontend deployment variables
+  ansible.builtin.assert:
+    that:
+      - routepilot_image_tag is defined
+      - routepilot_image_tag | length > 0
+      - ghcr_username is defined
+      - ghcr_username | length > 0
+      - ghcr_token is defined
+      - ghcr_token | length > 0
 
+    fail_msg: >-
+      RoutePilot image tag or GHCR credentials are missing.
 
-- name: Fetch latest GitHub information
-  ansible.builtin.command:
-    cmd: git -C /opt/routepilot fetch origin main
-  become_user: ubuntu
-  changed_when: false
-  check_mode: false
-  when: routepilot_frontend_git.stat.exists
-
-
-- name: Get currently deployed Git commit
-  ansible.builtin.command:
-    cmd: git -C /opt/routepilot rev-parse HEAD
-  register: frontend_commit_current
-  changed_when: false
-  check_mode: false
-  when: routepilot_frontend_git.stat.exists
+  no_log: true
 
 
-- name: Get latest remote Git commit
-  ansible.builtin.command:
-    cmd: git -C /opt/routepilot rev-parse origin/main
-  register: frontend_commit_remote
-  changed_when: false
-  check_mode: false
-  when: routepilot_frontend_git.stat.exists
-
-
-- name: Find changed frontend files
-  ansible.builtin.command:
-    argv:
-      - git
-      - -C
-      - /opt/routepilot
-      - diff
-      - --name-only
-      - HEAD
-      - origin/main
-      - --
-      - frontend/
-  register: frontend_changed_files
-  changed_when: false
-  check_mode: false
-  when: routepilot_frontend_git.stat.exists
-
-
-- name: Decide whether frontend source changed
-  ansible.builtin.set_fact:
-    frontend_source_changed: >-
-      {{
-        (not routepilot_frontend_git.stat.exists)
-        or
-        (
-          frontend_changed_files.stdout | default('') | trim | length > 0
-        )
-      }}
-
-
-# ---------------------------------------------------------
-# Update repository
-# ---------------------------------------------------------
-
-- name: Clone or update RoutePilot repository
-  ansible.builtin.git:
-    repo: "https://github.com/Nadaaath/routepilot.git"
-    dest: /opt/routepilot
-    version: main
-    update: true
-    force: false
-  become_user: ubuntu
-
-
-# ---------------------------------------------------------
-# Nginx runtime configuration
-# ---------------------------------------------------------
+# ------------------------------------------------------------
+# Runtime Nginx configuration
+# ------------------------------------------------------------
 
 - name: Ensure RoutePilot configuration directory exists
   ansible.builtin.file:
@@ -109,44 +50,66 @@
     owner: root
     group: root
     mode: "0644"
+
   register: frontend_nginx_config
 
 
-# ---------------------------------------------------------
-# Docker image
-# ---------------------------------------------------------
+# ------------------------------------------------------------
+# Pull exact CI artifact
+# ------------------------------------------------------------
 
-- name: Build RoutePilot frontend Docker image
-  community.docker.docker_image:
-    name: routepilot-frontend
-    tag: "1.0"
-    source: build
-    build:
-      path: /opt/routepilot/frontend
-    force_source: "{{ frontend_source_changed | bool }}"
-  register: frontend_image
+- name: Deploy RoutePilot frontend Docker image
+  block:
+
+    - name: Authenticate frontend host to GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        username: "{{ ghcr_username }}"
+        password: "{{ ghcr_token }}"
+        reauthorize: true
+
+      no_log: true
 
 
-# ---------------------------------------------------------
-# Frontend container
-# ---------------------------------------------------------
+    - name: Pull RoutePilot frontend image
+      community.docker.docker_image:
+        name: ghcr.io/nadaaath/routepilot-frontend
+        tag: "{{ routepilot_image_tag }}"
+        source: pull
+        state: present
 
-- name: Run RoutePilot frontend container
-  community.docker.docker_container:
-    name: routepilot-frontend
-    image: routepilot-frontend:1.0
-    state: started
-    restart_policy: unless-stopped
+      register: frontend_image
 
-    published_ports:
-      - "80:80"
 
-    volumes:
-      - "/etc/routepilot/frontend-nginx.conf:/etc/nginx/conf.d/default.conf:ro"
+    - name: Run RoutePilot frontend container
+      community.docker.docker_container:
+        name: routepilot-frontend
 
-    recreate: >-
-      {{
-        (frontend_image.changed | default(false))
-        or
-        (frontend_nginx_config.changed | default(false))
-      }}
+        image: >-
+          ghcr.io/nadaaath/routepilot-frontend:{{ routepilot_image_tag }}
+
+        state: started
+        restart_policy: unless-stopped
+
+        published_ports:
+          - "80:80"
+
+        volumes:
+          - "/etc/routepilot/frontend-nginx.conf:/etc/nginx/conf.d/default.conf:ro"
+
+        recreate: >-
+          {{
+            (frontend_image.changed | default(false))
+            or
+            (frontend_nginx_config.changed | default(false))
+          }}
+
+
+  always:
+
+    - name: Log frontend host out from GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        state: absent
+
+      no_log: true

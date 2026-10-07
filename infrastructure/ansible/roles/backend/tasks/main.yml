@@ -1,91 +1,38 @@
 ---
-- name: Ensure backend deployment directory exists
-  ansible.builtin.file:
-    path: /opt/routepilot
-    state: directory
-    owner: ubuntu
-    group: ubuntu
-    mode: "0755"
+# ============================================================
+# ROUTEPILOT BACKEND DEPLOYMENT
+# ============================================================
+#
+# Jenkins builds and publishes the backend Docker image.
+#
+# The backend VM does NOT build application source anymore.
+# It pulls and runs the exact immutable image produced by CI.
+# ============================================================
 
 
-# ---------------------------------------------------------
-# Detect the currently deployed Git commit
-# ---------------------------------------------------------
+# ------------------------------------------------------------
+# Validate deployment input
+# ------------------------------------------------------------
 
-- name: Check whether RoutePilot Git repository already exists
-  ansible.builtin.stat:
-    path: /opt/routepilot/.git
-  register: routepilot_git_repo
+- name: Validate backend deployment variables
+  ansible.builtin.assert:
+    that:
+      - routepilot_image_tag is defined
+      - routepilot_image_tag | length > 0
+      - ghcr_username is defined
+      - ghcr_username | length > 0
+      - ghcr_token is defined
+      - ghcr_token | length > 0
 
+    fail_msg: >-
+      RoutePilot image tag or GHCR credentials are missing.
 
-- name: Get currently deployed Git commit
-  ansible.builtin.command:
-    cmd: git -C /opt/routepilot rev-parse HEAD
-  register: backend_commit_before
-  changed_when: false
-  when: routepilot_git_repo.stat.exists
-
-
-# ---------------------------------------------------------
-# Update the repository
-# ---------------------------------------------------------
-
-- name: Clone or update RoutePilot repository
-  ansible.builtin.git:
-    repo: "https://github.com/Nadaaath/routepilot.git"
-    dest: /opt/routepilot
-    version: main
-    update: true
-    force: false
-  become_user: ubuntu
-  register: routepilot_repo
+  no_log: true
 
 
-- name: Get Git commit after repository update
-  ansible.builtin.command:
-    cmd: git -C /opt/routepilot rev-parse HEAD
-  register: backend_commit_after
-  changed_when: false
-
-
-# ---------------------------------------------------------
-# Detect whether BACKEND CODE actually changed
-# ---------------------------------------------------------
-
-- name: Find changed backend files
-  ansible.builtin.command:
-    argv:
-      - git
-      - -C
-      - /opt/routepilot
-      - diff
-      - --name-only
-      - "{{ backend_commit_before.stdout }}"
-      - "{{ backend_commit_after.stdout }}"
-      - --
-      - backend/
-  register: backend_changed_files
-  changed_when: false
-  when:
-    - routepilot_git_repo.stat.exists
-    - backend_commit_before.stdout != backend_commit_after.stdout
-
-
-- name: Decide whether backend image must be rebuilt
-  ansible.builtin.set_fact:
-    backend_source_changed: >-
-      {{
-        (not routepilot_git_repo.stat.exists)
-        or
-        (
-          backend_changed_files.stdout | default('') | trim | length > 0
-        )
-      }}
-
-
-# ---------------------------------------------------------
-# Backend configuration
-# ---------------------------------------------------------
+# ------------------------------------------------------------
+# Runtime configuration
+# ------------------------------------------------------------
 
 - name: Ensure RoutePilot configuration directory exists
   ansible.builtin.file:
@@ -103,55 +50,83 @@
     owner: root
     group: root
     mode: "0600"
+
   no_log: true
   register: backend_env_config
 
 
-# ---------------------------------------------------------
-# Docker image
-# ---------------------------------------------------------
+# ------------------------------------------------------------
+# Pull exact CI artifact
+# ------------------------------------------------------------
 
-- name: Build RoutePilot backend Docker image
-  community.docker.docker_image:
-    name: routepilot-backend
-    tag: "1.0"
-    source: build
-    build:
-      path: /opt/routepilot/backend
-    force_source: "{{ backend_source_changed | bool }}"
-  register: backend_image
+- name: Deploy RoutePilot backend Docker image
+  block:
+
+    - name: Authenticate backend host to GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        username: "{{ ghcr_username }}"
+        password: "{{ ghcr_token }}"
+        reauthorize: true
+
+      no_log: true
 
 
-# ---------------------------------------------------------
-# Backend container
-# ---------------------------------------------------------
+    - name: Pull RoutePilot backend image
+      community.docker.docker_image:
+        name: ghcr.io/nadaaath/routepilot-backend
+        tag: "{{ routepilot_image_tag }}"
+        source: pull
+        state: present
 
-- name: Run RoutePilot backend container
-  community.docker.docker_container:
-    name: routepilot-backend
-    image: routepilot-backend:1.0
-    state: started
-    restart_policy: unless-stopped
+      register: backend_image
 
-    env_file: /etc/routepilot/backend.env
 
-    published_ports:
-      - "8000:8000"
+    - name: Run RoutePilot backend container
+      community.docker.docker_container:
+        name: routepilot-backend
 
-    recreate: >-
-      {{
-        (backend_image.changed | default(false))
-        or
-        (backend_env_config.changed | default(false))
-      }}
+        image: >-
+          ghcr.io/nadaaath/routepilot-backend:{{ routepilot_image_tag }}
 
-# ---------------------------------------------------------
-# Database migrations
-# ---------------------------------------------------------
+        state: started
+        restart_policy: unless-stopped
+
+        env_file: /etc/routepilot/backend.env
+
+        published_ports:
+          - "8000:8000"
+
+        recreate: >-
+          {{
+            (backend_image.changed | default(false))
+            or
+            (backend_env_config.changed | default(false))
+          }}
+
+
+  always:
+
+    - name: Log backend host out from GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        state: absent
+
+      no_log: true
+
+
+# ------------------------------------------------------------
+# Prisma migrations
+# ------------------------------------------------------------
 
 - name: Apply Prisma database migrations
   ansible.builtin.command:
-    cmd: docker exec routepilot-backend npx prisma migrate deploy
+    cmd: >-
+      docker exec routepilot-backend
+      npx prisma migrate deploy
+
   register: prisma_migrate
-  changed_when: >
-    'No pending migrations to apply' not in prisma_migrate.stdout
+
+  changed_when: >-
+    'No pending migrations to apply'
+    not in prisma_migrate.stdout

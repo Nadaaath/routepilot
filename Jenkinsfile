@@ -2,27 +2,45 @@ pipeline {
     agent any
 
     options {
-    skipDefaultCheckout(true)
-    disableConcurrentBuilds()
-    timeout(time: 30, unit: 'MINUTES')
-    buildDiscarder(logRotator(numToKeepStr: '10'))
-}
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
 
     environment {
         CI = 'true'
 
-        // CI-only Prisma configuration.
-        // NOT the HCS production database.
+        // CI-only database URL used by Prisma validation/generation.
+        // This is NOT the HCS production database.
         DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/routepilot_ci?schema=public'
     }
 
     stages {
 
+        // ====================================================
+        // SOURCE CODE
+        // ====================================================
+
         stage('Checkout') {
             steps {
                 checkout scm
+
+                script {
+                    env.ROUTEPILOT_IMAGE_TAG = sh(
+                        script: 'git rev-parse --short=7 HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    echo "RoutePilot release tag: ${env.ROUTEPILOT_IMAGE_TAG}"
+                }
             }
         }
+
+
+        // ====================================================
+        // BACKEND CI
+        // ====================================================
 
         stage('Backend') {
             steps {
@@ -35,6 +53,11 @@ pipeline {
             }
         }
 
+
+        // ====================================================
+        // FRONTEND CI
+        // ====================================================
+
         stage('Frontend') {
             steps {
                 dir('frontend') {
@@ -44,42 +67,59 @@ pipeline {
             }
         }
 
-        stage('Docker Build') {
-            steps {
-                sh '''
-                    docker build \
-                      -t routepilot-backend:${BUILD_NUMBER} \
-                      ./backend
-                '''
 
-                sh '''
-                    docker build \
-                      --build-arg VITE_API_BASE_URL=/api \
-                      -t routepilot-frontend:${BUILD_NUMBER} \
-                      ./frontend
-                '''
+        // ====================================================
+        // BUILD + PUBLISH IMMUTABLE DOCKER ARTIFACTS
+        // ====================================================
+
+        stage('Build and Publish Images') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ghcr-credentials',
+                        usernameVariable: 'GHCR_USER',
+                        passwordVariable: 'GHCR_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -e
+
+                        echo "Building RoutePilot images:"
+                        echo "  Backend : ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG"
+                        echo "  Frontend: ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG"
+
+                        docker build \
+                          -t ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG \
+                          ./backend
+
+                        docker build \
+                          --build-arg VITE_API_BASE_URL=/api \
+                          -t ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG \
+                          ./frontend
+
+                        set +x
+
+                        printf '%s' "$GHCR_TOKEN" | \
+                            docker login ghcr.io \
+                            -u "$GHCR_USER" \
+                            --password-stdin
+
+                        trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+
+                        docker push \
+                          ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG
+
+                        docker push \
+                          ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG
+                    '''
+                }
             }
         }
 
-        stage('GHCR Login Test') {
-    steps {
-        withCredentials([
-            usernamePassword(
-                credentialsId: 'ghcr-credentials',
-                usernameVariable: 'GHCR_USER',
-                passwordVariable: 'GHCR_TOKEN'
-            )
-        ]) {
-            sh '''
-                set +x
-                printf '%s' "$GHCR_TOKEN" | \
-                    docker login ghcr.io \
-                    -u "$GHCR_USER" \
-                    --password-stdin
-            '''
-        }
-    }
-}
+
+        // ====================================================
+        // VERIFY PRIVATE HCS MANAGEMENT PATH
+        // ====================================================
 
         stage('Ansible Preflight') {
             steps {
@@ -102,20 +142,26 @@ pipeline {
                             VAULT_FILE="$(mktemp)"
                             chmod 600 "$VAULT_FILE"
 
-                            printf '%s' "$ROUTEPILOT_VAULT_PASSWORD" > "$VAULT_FILE"
+                            trap 'rm -f "$VAULT_FILE"' EXIT
+
+                            printf '%s' "$ROUTEPILOT_VAULT_PASSWORD" \
+                              > "$VAULT_FILE"
 
                             ansible all \
                               -m ping \
                               -u "$ROUTEPILOT_SSH_USER" \
                               --private-key "$ROUTEPILOT_SSH_KEY" \
                               --vault-password-file "$VAULT_FILE"
-
-                            rm -f "$VAULT_FILE"
                         '''
                     }
                 }
             }
         }
+
+
+        // ====================================================
+        // DEPLOY EXACT JENKINS-BUILT IMAGES
+        // ====================================================
 
         stage('Deploy to HCS') {
             steps {
@@ -130,6 +176,11 @@ pipeline {
                         string(
                             credentialsId: 'routepilot-vault-password',
                             variable: 'ROUTEPILOT_VAULT_PASSWORD'
+                        ),
+                        usernamePassword(
+                            credentialsId: 'ghcr-credentials',
+                            usernameVariable: 'GHCR_USER',
+                            passwordVariable: 'GHCR_TOKEN'
                         )
                     ]) {
                         sh '''
@@ -138,52 +189,78 @@ pipeline {
                             VAULT_FILE="$(mktemp)"
                             chmod 600 "$VAULT_FILE"
 
-                            printf '%s' "$ROUTEPILOT_VAULT_PASSWORD" > "$VAULT_FILE"
+                            trap 'rm -f "$VAULT_FILE"' EXIT
+
+                            printf '%s' "$ROUTEPILOT_VAULT_PASSWORD" \
+                              > "$VAULT_FILE"
 
                             ansible-playbook \
                               playbooks/deploy.yml \
                               -u "$ROUTEPILOT_SSH_USER" \
                               --private-key "$ROUTEPILOT_SSH_KEY" \
                               --vault-password-file "$VAULT_FILE"
-
-                            rm -f "$VAULT_FILE"
                         '''
                     }
                 }
             }
         }
 
-        stage('Frontend Health Check') {
-            steps {
-                dir('infrastructure/ansible') {
 
-                    withCredentials([
-                        sshUserPrivateKey(
-                            credentialsId: 'routepilot-jenkins-ssh',
-                            keyFileVariable: 'ROUTEPILOT_SSH_KEY',
-                            usernameVariable: 'ROUTEPILOT_SSH_USER'
-                        )
-                    ]) {
-                        sh '''
-                            ansible frontend \
-                              -m uri \
-                              -a "url=http://127.0.0.1/ status_code=200" \
-                              -u "$ROUTEPILOT_SSH_USER" \
-                              --private-key "$ROUTEPILOT_SSH_KEY"
-                        '''
-                    }
+        // ====================================================
+        // POST-DEPLOYMENT HEALTH CHECKS
+        // ====================================================
+
+        stage('Health Checks') {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'routepilot-jenkins-ssh',
+                        keyFileVariable: 'ROUTEPILOT_SSH_KEY',
+                        usernameVariable: 'ROUTEPILOT_SSH_USER'
+                    )
+                ]) {
+                    sh '''
+                        set -e
+
+                        echo "Checking frontend container..."
+
+                        ssh \
+                          -i "$ROUTEPILOT_SSH_KEY" \
+                          -o BatchMode=yes \
+                          "$ROUTEPILOT_SSH_USER@10.100.1.10" \
+                          "curl -fsS --max-time 10 http://127.0.0.1/ > /dev/null"
+
+                        echo "Frontend OK"
+
+                        echo "Checking backend container..."
+
+                        ssh \
+                          -i "$ROUTEPILOT_SSH_KEY" \
+                          -o BatchMode=yes \
+                          "$ROUTEPILOT_SSH_USER@10.100.2.10" \
+                          "curl -fsS --max-time 10 http://127.0.0.1:8000/ > /dev/null"
+
+                        echo "Backend OK"
+                    '''
                 }
             }
         }
     }
 
+
+    // ========================================================
+    // PIPELINE RESULT
+    // ========================================================
+
     post {
+
         success {
-            echo "RoutePilot CI/CD succeeded - build ${BUILD_NUMBER}"
+            echo "RoutePilot CI/CD succeeded."
+            echo "Deployed image tag: ${env.ROUTEPILOT_IMAGE_TAG}"
         }
 
         failure {
-            echo "RoutePilot CI/CD failed - production deployment may not have completed."
+            echo "RoutePilot CI/CD failed."
         }
 
         always {
