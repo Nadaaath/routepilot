@@ -8,6 +8,14 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
+    parameters {
+    string(
+        name: 'ROLLBACK_TAG',
+        defaultValue: '',
+        description: 'Optional previous Git SHA to redeploy. Leave empty for a normal release.'
+    )
+}
+
     environment {
         CI = 'true'
 
@@ -23,19 +31,37 @@ pipeline {
         // ====================================================
 
         stage('Checkout') {
-            steps {
-                checkout scm
+    steps {
+        checkout scm
 
-                script {
-                    env.ROUTEPILOT_IMAGE_TAG = sh(
-                        script: 'git rev-parse --short=7 HEAD',
-                        returnStdout: true
-                    ).trim()
+        script {
+            def currentTag = sh(
+                script: 'git rev-parse --short=7 HEAD',
+                returnStdout: true
+            ).trim()
 
-                    echo "RoutePilot release tag: ${env.ROUTEPILOT_IMAGE_TAG}"
+            def rollbackTag = params.ROLLBACK_TAG?.trim()
+
+            if (rollbackTag) {
+
+                if (!(rollbackTag ==~ /^[0-9a-fA-F]{7,40}$/)) {
+                    error('ROLLBACK_TAG must be a valid Git SHA.')
                 }
+
+                env.ROUTEPILOT_IMAGE_TAG = rollbackTag.toLowerCase()
+                env.ROUTEPILOT_DEPLOY_MODE = 'ROLLBACK'
+
+            } else {
+
+                env.ROUTEPILOT_IMAGE_TAG = currentTag
+                env.ROUTEPILOT_DEPLOY_MODE = 'RELEASE'
             }
+
+            echo "Deployment mode: ${env.ROUTEPILOT_DEPLOY_MODE}"
+            echo "Image tag: ${env.ROUTEPILOT_IMAGE_TAG}"
         }
+    }
+}
 
 
         // ====================================================
@@ -43,6 +69,11 @@ pipeline {
         // ====================================================
 
         stage('Backend') {
+            when {
+    expression {
+        return env.ROUTEPILOT_DEPLOY_MODE == 'RELEASE'
+    }
+}
             steps {
                 dir('backend') {
                     sh 'npm ci'
@@ -59,6 +90,11 @@ pipeline {
         // ====================================================
 
         stage('Frontend') {
+            when {
+    expression {
+        return env.ROUTEPILOT_DEPLOY_MODE == 'RELEASE'
+    }
+}
             steps {
                 dir('frontend') {
                     sh 'npm ci'
@@ -73,6 +109,11 @@ pipeline {
         // ====================================================
 
         stage('Build and Publish Images') {
+            when {
+    expression {
+        return env.ROUTEPILOT_DEPLOY_MODE == 'RELEASE'
+    }
+}
             steps {
                 withCredentials([
                     usernamePassword(
@@ -115,6 +156,45 @@ pipeline {
                 }
             }
         }
+
+        stage('Verify Rollback Images') {
+
+    when {
+        expression {
+            return env.ROUTEPILOT_DEPLOY_MODE == 'ROLLBACK'
+        }
+    }
+
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'ghcr-credentials',
+                usernameVariable: 'GHCR_USER',
+                passwordVariable: 'GHCR_TOKEN'
+            )
+        ]) {
+            sh '''
+                set -e
+                set +x
+
+                printf '%s' "$GHCR_TOKEN" | \
+                    docker login ghcr.io \
+                    -u "$GHCR_USER" \
+                    --password-stdin
+
+                trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+
+                echo "Checking rollback images for $ROUTEPILOT_IMAGE_TAG"
+
+                docker pull \
+                  ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG
+
+                docker pull \
+                  ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG
+            '''
+        }
+    }
+}
 
 
         // ====================================================
