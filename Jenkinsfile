@@ -105,57 +105,87 @@ pipeline {
 
 
         // ====================================================
-        // BUILD + PUBLISH IMMUTABLE DOCKER ARTIFACTS
+        // BUILD + scan with trivy  + PUBLISH  DOCKER ARTIFACTS
         // ====================================================
 
-        stage('Build and Publish Images') {
-            when {
-    expression {
-        return env.ROUTEPILOT_DEPLOY_MODE == 'RELEASE'
+        stage('Build Images') {
+    steps {
+        sh '''
+            set -e
+
+            echo "Building RoutePilot images with tag: $ROUTEPILOT_IMAGE_TAG"
+
+            docker build \
+              -t ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG \
+              ./backend
+
+            docker build --pull \
+  --build-arg VITE_API_BASE_URL=/api \
+  -t ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG \
+  ./frontend
+        '''
     }
 }
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'ghcr-credentials',
-                        usernameVariable: 'GHCR_USER',
-                        passwordVariable: 'GHCR_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set -e
 
-                        echo "Building RoutePilot images:"
-                        echo "  Backend : ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG"
-                        echo "  Frontend: ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG"
 
-                        docker build \
-                          -t ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG \
-                          ./backend
+stage('Security Scan') {
+    steps {
+        sh '''
+            set -e
 
-                        docker build \
-                          --build-arg VITE_API_BASE_URL=/api \
-                          -t ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG \
-                          ./frontend
+            echo "Scanning backend image..."
 
-                        set +x
+            trivy --config "" image \
+              --ignorefile /dev/null \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 0 \
+              ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG
 
-                        printf '%s' "$GHCR_TOKEN" | \
-                            docker login ghcr.io \
-                            -u "$GHCR_USER" \
-                            --password-stdin
+            echo "Scanning frontend image..."
 
-                        trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+            trivy --config "" image \
+              --ignorefile /dev/null \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 0 \
+              ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG
+        '''
+    }
+}
 
-                        docker push \
-                          ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG
 
-                        docker push \
-                          ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG
-                    '''
-                }
-            }
+stage('Publish Images') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'ghcr-credentials',
+                usernameVariable: 'GHCR_USER',
+                passwordVariable: 'GHCR_TOKEN'
+            )
+        ]) {
+            sh '''
+                set -e
+                set +x
+
+                printf '%s' "$GHCR_TOKEN" | \
+                    docker login ghcr.io \
+                    -u "$GHCR_USER" \
+                    --password-stdin
+
+                trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+
+                docker push \
+                  ghcr.io/nadaaath/routepilot-backend:$ROUTEPILOT_IMAGE_TAG
+
+                docker push \
+                  ghcr.io/nadaaath/routepilot-frontend:$ROUTEPILOT_IMAGE_TAG
+            '''
         }
+    }
+}
 
         stage('Verify Rollback Images') {
 
