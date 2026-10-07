@@ -291,40 +291,70 @@ pipeline {
         // ====================================================
 
         stage('Health Checks') {
-            steps {
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: 'routepilot-jenkins-ssh',
-                        keyFileVariable: 'ROUTEPILOT_SSH_KEY',
-                        usernameVariable: 'ROUTEPILOT_SSH_USER'
-                    )
-                ]) {
-                    sh '''
-                        set -e
+    steps {
+        withCredentials([
+            sshUserPrivateKey(
+                credentialsId: 'routepilot-jenkins-ssh',
+                keyFileVariable: 'ROUTEPILOT_SSH_KEY',
+                usernameVariable: 'ROUTEPILOT_SSH_USER'
+            )
+        ]) {
+            sh '''
+                set -e
 
-                        echo "Checking frontend container..."
+                echo "1. Checking frontend locally..."
+                ssh \
+                  -i "$ROUTEPILOT_SSH_KEY" \
+                  -o BatchMode=yes \
+                  "$ROUTEPILOT_SSH_USER@10.100.1.10" \
+                  "curl -fsS --max-time 10 http://127.0.0.1/ > /dev/null"
 
-                        ssh \
-                          -i "$ROUTEPILOT_SSH_KEY" \
-                          -o BatchMode=yes \
-                          "$ROUTEPILOT_SSH_USER@10.100.1.10" \
-                          "curl -fsS --max-time 10 http://127.0.0.1/ > /dev/null"
+                echo "Frontend OK"
 
-                        echo "Frontend OK"
 
-                        echo "Checking backend container..."
+                echo "2. Checking backend locally..."
+                ssh \
+                  -i "$ROUTEPILOT_SSH_KEY" \
+                  -o BatchMode=yes \
+                  "$ROUTEPILOT_SSH_USER@10.100.2.10" \
+                  "curl -fsS --max-time 10 http://127.0.0.1:8000/ > /dev/null"
 
-                        ssh \
-                          -i "$ROUTEPILOT_SSH_KEY" \
-                          -o BatchMode=yes \
-                          "$ROUTEPILOT_SSH_USER@10.100.2.10" \
-                          "curl -fsS --max-time 10 http://127.0.0.1:8000/ > /dev/null"
+                echo "Backend OK"
 
-                        echo "Backend OK"
-                    '''
-                }
-            }
+
+                echo "3. Checking backend -> PostgreSQL connectivity..."
+                ssh \
+                  -i "$ROUTEPILOT_SSH_KEY" \
+                  -o BatchMode=yes \
+                  "$ROUTEPILOT_SSH_USER@10.100.2.10" \
+                  "sudo docker exec routepilot-backend npx prisma migrate status"
+
+                echo "Database connectivity OK"
+
+
+                echo "4. Checking public RoutePilot frontend..."
+                curl -fsS \
+                  --max-time 15 \
+                  http://41.137.193.196/ \
+                  > /dev/null
+
+                echo "Public frontend OK"
+
+
+                echo "5. Checking public API path..."
+                curl -fsS \
+                  --max-time 15 \
+                  http://41.137.193.196/api/ \
+                  > /dev/null
+
+                echo "Public API OK"
+
+
+                echo "All RoutePilot health checks passed."
+            '''
         }
+    }
+}
     }
 
 
