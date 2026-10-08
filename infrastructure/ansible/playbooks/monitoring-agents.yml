@@ -1,0 +1,8 @@
+---
+- name: Install monitoring agents on RoutePilot infrastructure
+  hosts: monitored
+  become: true
+  gather_facts: true
+
+  roles:
+    - node_exporter
