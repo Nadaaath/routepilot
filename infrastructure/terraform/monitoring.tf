@@ -197,3 +197,16 @@ resource "hcs_ecs_compute_instance" "monitoring" {
     tier    = "monitoring"
   }
 }
+
+resource "hcs_networking_secgroup_rule" "backend_metrics_from_monitoring" {
+  security_group_id = hcs_networking_secgroup.backend.id
+
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+
+  port_range_min = var.backend_port
+  port_range_max = var.backend_port
+
+  remote_group_id = hcs_networking_secgroup.monitoring.id
+}

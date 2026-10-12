@@ -12,12 +12,15 @@ import depotRoutes from "./routes/depot.routes";
 import shiftAssignmentRoutes from "./routes/shiftAssignment.routes";
 import vehicleAvailabilityRoutes from "./routes/vehicleAvailability.routes";
 import transportPlanRoutes from "./routes/transportPlan.routes";
+import { metricsRegistry } from "./lib/metrics";
+import { metricsMiddleware } from "./middlewares/metrics.middleware";
 
 export const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use("/depots", depotRoutes);
+app.use(metricsMiddleware);
 
 app.get("/", (_req, res) => {
   res.send("Employee Transport Optimizer API");
@@ -28,6 +31,14 @@ app.get("/health", (_req, res) => {
     status: "ok",
     message: "Employee Transport Optimizer API is running",
   });
+});
+app.get("/metrics", async (_req, res, next) => {
+  try {
+    res.set("Content-Type", metricsRegistry.contentType);
+    res.end(await metricsRegistry.metrics());
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use("/employees", employeeRoutes);
