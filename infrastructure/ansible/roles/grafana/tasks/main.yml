@@ -1,0 +1,48 @@
+---
+- name: Install Grafana repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - wget
+      - gnupg
+    state: present
+    update_cache: true
+
+- name: Ensure APT keyring directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download Grafana repository GPG key
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg-full.key
+    dest: /etc/apt/keyrings/grafana.asc
+    mode: "0644"
+
+- name: Configure Grafana APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+    filename: grafana
+    state: present
+
+- name: Install Grafana
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true
+
+- name: Provision Prometheus datasource
+  ansible.builtin.template:
+    src: prometheus-datasource.yml.j2
+    dest: /etc/grafana/provisioning/datasources/prometheus.yml
+    owner: root
+    group: grafana
+    mode: "0644"
+  notify: Restart Grafana
+
+- name: Ensure Grafana is enabled and running
+  ansible.builtin.systemd:
+    name: grafana-server
+    enabled: true
+    state: started
