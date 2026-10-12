@@ -1,0 +1,8 @@
+---
+- name: Configure RoutePilot Prometheus server
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  roles:
+    - prometheus
