@@ -43,3 +43,15 @@ scrape_configs:
           - "10.100.2.10:8000"
         labels:
           component: "backend-api"
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets:
+          - "10.100.1.10:8080"
+        labels:
+          instance: "frontend"
+
+      - targets:
+          - "10.100.2.10:8080"
+        labels:
+          instance: "backend"
