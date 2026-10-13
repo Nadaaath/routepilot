@@ -1,0 +1,72 @@
+groups:
+  - name: routepilot-infrastructure
+    rules:
+
+      - alert: RoutePilotInstanceDown
+        expr: up{job="node_exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RoutePilot instance {{ $labels.instance }} is down"
+          description: "Prometheus has been unable to scrape {{ $labels.instance }} for more than 1 minute."
+
+      - alert: RoutePilotHighCPU
+        expr: |
+          100 - (
+            avg by(instance) (
+              rate(node_cpu_seconds_total{job="node_exporter",mode="idle"}[5m])
+            ) * 100
+          ) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage has remained above 80% for 5 minutes."
+
+      - alert: RoutePilotHighMemory
+        expr: |
+          100 * (
+            1 -
+            (
+              node_memory_MemAvailable_bytes{job="node_exporter"}
+              /
+              node_memory_MemTotal_bytes{job="node_exporter"}
+            )
+          ) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage has remained above 85% for 5 minutes."
+
+  - name: routepilot-application
+    rules:
+
+      - alert: RoutePilotBackendDown
+        expr: up{job="routepilot_backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RoutePilot backend API is unavailable"
+          description: "Prometheus has been unable to scrape the backend application for more than 1 minute."
+
+      - alert: RoutePilotBackendHighErrorRate
+        expr: |
+          (
+            sum(rate(routepilot_http_requests_total{job="routepilot_backend",status_code=~"5.."}[5m]))
+            /
+            clamp_min(
+              sum(rate(routepilot_http_requests_total{job="routepilot_backend"}[5m])),
+              0.001
+            )
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx rate on RoutePilot backend"
+          description: "More than 5% of backend requests have returned HTTP 5xx responses for 5 minutes."
