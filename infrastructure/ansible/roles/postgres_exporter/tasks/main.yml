@@ -6,9 +6,8 @@
     update_cache: true
 
 - name: Ensure PostgreSQL exporter role exists
-  become_user: postgres
   ansible.builtin.shell: |
-    psql -v ON_ERROR_STOP=1 <<'SQL'
+    sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -26,9 +25,8 @@
   changed_when: false
 
 - name: Configure PostgreSQL exporter role
-  become_user: postgres
   ansible.builtin.shell: |
-    psql \
+    sudo -u postgres psql \
       -v ON_ERROR_STOP=1 \
       -v exporter_password="$POSTGRES_EXPORTER_PASSWORD" <<'SQL'
     ALTER ROLE postgres_exporter PASSWORD :'exporter_password';
