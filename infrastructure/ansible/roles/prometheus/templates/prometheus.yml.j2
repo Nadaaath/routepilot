@@ -55,3 +55,10 @@ scrape_configs:
           - "10.100.2.10:8080"
         labels:
           instance: "backend"
+
+  - job_name: "postgresql"
+    static_configs:
+      - targets:
+          - "10.100.3.10:9187"
+        labels:
+          instance: "database"
