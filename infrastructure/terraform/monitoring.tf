@@ -251,3 +251,20 @@ resource "hcs_networking_secgroup_rule" "database_cadvisor_from_monitoring" {
 
   remote_group_id = hcs_networking_secgroup.monitoring.id
 }
+
+
+###############################
+# DB Monitoring 
+#############################
+resource "hcs_networking_secgroup_rule" "database_postgres_exporter_from_monitoring" {
+  security_group_id = hcs_networking_secgroup.database.id
+
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+
+  port_range_min = 9187
+  port_range_max = 9187
+
+  remote_group_id = hcs_networking_secgroup.monitoring.id
+}

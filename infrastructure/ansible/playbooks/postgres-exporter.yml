@@ -1,0 +1,8 @@
+---
+- name: Deploy PostgreSQL monitoring
+  hosts: database
+  become: true
+  gather_facts: true
+
+  roles:
+    - postgres_exporter
