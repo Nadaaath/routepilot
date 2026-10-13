@@ -210,3 +210,44 @@ resource "hcs_networking_secgroup_rule" "backend_metrics_from_monitoring" {
 
   remote_group_id = hcs_networking_secgroup.monitoring.id
 }
+
+############CAdvisore
+
+resource "hcs_networking_secgroup_rule" "frontend_cadvisor_from_monitoring" {
+  security_group_id = hcs_networking_secgroup.frontend.id
+
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+
+  port_range_min = 8080
+  port_range_max = 8080
+
+  remote_group_id = hcs_networking_secgroup.monitoring.id
+}
+
+resource "hcs_networking_secgroup_rule" "backend_cadvisor_from_monitoring" {
+  security_group_id = hcs_networking_secgroup.backend.id
+
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+
+  port_range_min = 8080
+  port_range_max = 8080
+
+  remote_group_id = hcs_networking_secgroup.monitoring.id
+}
+
+resource "hcs_networking_secgroup_rule" "database_cadvisor_from_monitoring" {
+  security_group_id = hcs_networking_secgroup.database.id
+
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+
+  port_range_min = 8080
+  port_range_max = 8080
+
+  remote_group_id = hcs_networking_secgroup.monitoring.id
+}
