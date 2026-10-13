@@ -1,0 +1,8 @@
+---
+- name: Deploy cAdvisor on RoutePilot container hosts
+  hosts: routepilot
+  become: true
+  gather_facts: true
+
+  roles:
+    - cadvisor

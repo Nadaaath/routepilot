@@ -1,0 +1,23 @@
+---
+- name: Ensure Docker is enabled and running
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Deploy cAdvisor container
+  community.docker.docker_container:
+    name: cadvisor
+    image: ghcr.io/google/cadvisor:v0.60.6
+    state: started
+    restart_policy: unless-stopped
+    pull: true
+
+    published_ports:
+      - "8080:8080"
+
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:rw"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker:/var/lib/docker:ro"
