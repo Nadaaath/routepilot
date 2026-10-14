@@ -87,4 +87,50 @@ groups:
         annotations:
           summary: "RoutePilot {{ $labels.service }} HTTP probe failed"
           description: "The {{ $labels.service }} service has failed its HTTP availability probe for more than 1 minute."
+
+      - alert: RoutePilotDiskUsageWarning
+        expr: |
+          100 * (
+            1 -
+            node_filesystem_avail_bytes{
+              job="node_exporter",
+              mountpoint="/",
+              fstype!~"tmpfs|overlay"
+            }
+            /
+            node_filesystem_size_bytes{
+              job="node_exporter",
+              mountpoint="/",
+              fstype!~"tmpfs|overlay"
+            }
+          ) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Root filesystem usage has exceeded 80% for more than 5 minutes."
+
+      - alert: RoutePilotDiskUsageCritical
+        expr: |
+          100 * (
+            1 -
+            node_filesystem_avail_bytes{
+              job="node_exporter",
+              mountpoint="/",
+              fstype!~"tmpfs|overlay"
+            }
+            /
+            node_filesystem_size_bytes{
+              job="node_exporter",
+              mountpoint="/",
+              fstype!~"tmpfs|overlay"
+            }
+          ) > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk usage on {{ $labels.instance }}"
+          description: "Root filesystem usage has exceeded 90%."
 {% endraw %}
