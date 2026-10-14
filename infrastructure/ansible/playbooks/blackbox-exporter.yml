@@ -1,0 +1,8 @@
+---
+- name: Deploy RoutePilot Blackbox Exporter
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  roles:
+    - blackbox_exporter
