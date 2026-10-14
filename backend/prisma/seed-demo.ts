@@ -1,5 +1,4 @@
-import { prisma } from "../dist/lib/prisma";
-
+import { prisma } from "../src/lib/prisma";
 const TODAY = new Date();
 TODAY.setUTCHours(0, 0, 0, 0);
 

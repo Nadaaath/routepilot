@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "seed:demo": "tsx prisma/seed-demo.ts",
+    "seed:demo:hcs": "node prisma/seed-demo-runtime.js",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate"
