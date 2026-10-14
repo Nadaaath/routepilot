@@ -10,7 +10,7 @@
     src: alertmanager.yml.j2
     dest: /etc/prometheus/alertmanager.yml
     owner: root
-    group: root
+    group: prometheus
     mode: "0640"
   notify: Restart Alertmanager
 
