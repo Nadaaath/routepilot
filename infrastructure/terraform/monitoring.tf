@@ -268,3 +268,24 @@ resource "hcs_networking_secgroup_rule" "database_postgres_exporter_from_monitor
 
   remote_group_id = hcs_networking_secgroup.monitoring.id
 }
+
+# ============================================================
+# BASTION -> ALERTMANAGER
+# ============================================================
+#
+# Alertmanager remains private.
+# Access is provided through an SSH tunnel via the bastion.
+# ============================================================
+
+resource "hcs_networking_secgroup_rule" "monitoring_alertmanager_from_bastion" {
+  security_group_id = hcs_networking_secgroup.monitoring.id
+
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+
+  port_range_min = 9093
+  port_range_max = 9093
+
+  remote_group_id = hcs_networking_secgroup.bastion.id
+}
