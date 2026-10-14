@@ -1,5 +1,8 @@
 import express from "express";
 import cors from "cors";
+import { prisma } from "./lib/prisma";
+
+
 
 import employeeRoutes from "./routes/employee.routes";
 import pickupPointRoutes from "./routes/pickupPoint.routes";
@@ -41,6 +44,23 @@ app.get("/metrics", async (_req, res, next) => {
   }
 });
 
+app.get("/ready", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+
+    res.status(200).json({
+      status: "ready",
+      database: "connected",
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: "not ready",
+      database: "unavailable",
+    });
+  }
+});
+
+
 app.use("/employees", employeeRoutes);
 app.use("/pickup-points", pickupPointRoutes);
 app.use("/vehicles", vehicleRoutes);
@@ -52,3 +72,4 @@ app.use("/vehicle-availability", vehicleAvailabilityRoutes);
 app.use("/plans", transportPlanRoutes);
 
 app.use(errorMiddleware);
+

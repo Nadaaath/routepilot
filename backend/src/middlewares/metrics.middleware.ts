@@ -9,9 +9,13 @@ export function metricsMiddleware(
   res: Response,
   next: NextFunction
 ) {
-  if (req.path === "/metrics") {
-    return next();
-  }
+  if (
+  req.path === "/metrics" ||
+  req.path === "/health" ||
+  req.path === "/ready"
+) {
+  return next();
+}
 
   const endTimer = httpRequestDurationSeconds.startTimer();
 
