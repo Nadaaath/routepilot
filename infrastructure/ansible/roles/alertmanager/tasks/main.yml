@@ -11,7 +11,7 @@
     dest: /etc/prometheus/alertmanager.yml
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
   notify: Restart Alertmanager
 
 - name: Ensure Alertmanager is enabled and running
@@ -19,3 +19,4 @@
     name: prometheus-alertmanager
     enabled: true
     state: started
+

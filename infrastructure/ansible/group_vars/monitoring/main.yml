@@ -1,0 +1,2 @@
+---
+alertmanager_smtp_smarthost: "smtp.gmail.com:587"
