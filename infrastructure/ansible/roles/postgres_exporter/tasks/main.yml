@@ -35,7 +35,7 @@
   args:
     executable: /bin/bash
   environment:
-    POSTGRES_EXPORTER_PASSWORD: "{{ vault_postgres_exporter_password }}"
+    POSTGRES_EXPORTER_PASSWORD: "{{ vault_postgres_exporter_password | trim }}"
   no_log: true
   changed_when: false
 
