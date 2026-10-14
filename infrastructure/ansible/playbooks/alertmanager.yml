@@ -1,0 +1,8 @@
+---
+- name: Deploy RoutePilot Alertmanager
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  roles:
+    - alertmanager
