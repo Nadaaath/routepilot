@@ -68,27 +68,29 @@ async function main() {
   // 1. Reuse existing shifts
   // --------------------------------------------------
 
-  const shifts = await prisma.shift.findMany();
+const shifts = await prisma.shift.findMany({
+  orderBy: {
+    id: "asc",
+  },
+});
 
-  const morning = shifts.find((s) => s.name === "Morning");
-  const between = shifts.find((s) => s.name === "In-Between Shift");
-  const night = shifts.find((s) => s.name === "Night");
-
-  if (!morning || !between || !night) {
-    throw new Error(
-      "Expected shifts not found. Required: Morning, In-Between Shift, Night."
-    );
-  }
-
-  console.log("Existing shifts found:");
-  console.log(
-    shifts.map((s) => ({
-      id: s.id,
-      name: s.name,
-    }))
+if (shifts.length < 3) {
+  throw new Error(
+    `Expected at least 3 existing shifts, but found ${shifts.length}.`
   );
+}
 
-  const demoShifts = [morning, between, night];
+const demoShifts = shifts.slice(0, 3);
+
+console.log("Using existing shifts:");
+console.log(
+  demoShifts.map((shift) => ({
+    id: shift.id,
+    name: shift.name,
+    startTime: shift.startTime,
+    endTime: shift.endTime,
+  }))
+);
 
   // --------------------------------------------------
   // 2. Create / reuse pickup points
